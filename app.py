@@ -1,6 +1,7 @@
 """
 MVSA Multimodal Sentiment Analysis — Streamlit Application
 BERT (text) + ResNet-50 (image) → Gated Cross-Attention Fusion → 3-class Sentiment
+Model loaded from Hugging Face Hub
 """
 
 import streamlit as st
@@ -10,10 +11,16 @@ import torch.nn.functional as F
 from torchvision import models, transforms
 import numpy as np
 from PIL import Image, ImageFile
-import re, os, io, base64
+import re, os, io, base64, tempfile
 from pathlib import Path
+from huggingface_hub import hf_hub_download
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+# ─── Hugging Face Model Config ────────────────────────────────────────────────
+# Replace with your Hugging Face repo details
+HF_REPO_ID = "TechyCode/multimodal-sentiment-model"  # Your HF repo
+HF_MODEL_FILENAME = "best_model.pt"
 
 # ─── Page Config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -334,13 +341,21 @@ class MultimodalSentimentModel(nn.Module):
             self.image_enc(images)
         ))
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ─── Hugging Face Model Loader ────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def load_model(ckpt_path):
-    """Load model checkpoint."""
+def load_model_from_hf():
+    """Load model checkpoint directly from Hugging Face Hub."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Download model file from Hugging Face
+    model_path = hf_hub_download(
+        repo_id=HF_REPO_ID,
+        filename=HF_MODEL_FILENAME
+    )
+    
+    # Load model
     model = MultimodalSentimentModel(CONFIG).to(device)
-    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
+    ckpt = torch.load(model_path, map_location=device, weights_only=False)
     state = ckpt.get("model_state", ckpt)
     model.load_state_dict(state, strict=False)
     model.eval()
@@ -405,54 +420,18 @@ with st.sidebar:
 
     st.divider()
 
-    # Model checkpoint — auto-load from disk, fallback to uploader
-    st.markdown("<p style='color:rgba(255,255,255,0.6); font-size:0.82rem; font-weight:600; letter-spacing:1px; text-transform:uppercase;'>Model Checkpoint</p>", unsafe_allow_html=True)
-
-    # Search for the checkpoint in common locations (relative to app.py, cwd, /tmp)
-    _SEARCH_PATHS = [
-        Path(__file__).parent / "best_model.pt",
-        Path(__file__).parent / "outputs" / "best_model.pt",
-        Path(__file__).parent / "outputs" / "deployment" / "best_model.pt",
-        Path.cwd() / "best_model.pt",
-        Path("/tmp/best_model.pt"),
-    ]
-
-    if "ckpt_path" not in st.session_state:
-        for _p in _SEARCH_PATHS:
-            if _p.exists():
-                st.session_state["ckpt_path"] = str(_p)
-                break
-
-    if "ckpt_path" in st.session_state:
-        _loaded_path = st.session_state["ckpt_path"]
-        st.markdown(f"""
-        <div style='background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.35);
-                    border-radius:10px; padding:10px 14px; font-size:0.8rem;'>
-            <span style='color:#34d399; font-weight:600;'>✅ Model ready</span><br>
-            <span style='color:rgba(255,255,255,0.45); font-size:0.74rem; word-break:break-all;'>
-                {_loaded_path}
-            </span>
-        </div>""", unsafe_allow_html=True)
-        # Still allow replacing with a different checkpoint
-        with st.expander("🔄 Replace checkpoint", expanded=False):
-            ckpt_file = st.file_uploader("Upload best_model.pt", type=["pt", "pth"], label_visibility="collapsed", key="ckpt_replace")
-            if ckpt_file:
-                ckpt_tmp = Path("/tmp/best_model_upload.pt")
-                ckpt_tmp.write_bytes(ckpt_file.read())
-                st.session_state["ckpt_path"] = str(ckpt_tmp)
-                st.rerun()
-    else:
-        st.markdown("""
-        <div style='color:rgba(255,180,0,0.8); font-size:0.78rem; margin-bottom:8px;'>
-            ⚠️ No checkpoint found automatically.<br>
-            <span style='color:rgba(255,255,255,0.4);'>Place <code>best_model.pt</code> next to app.py or upload below.</span>
-        </div>""", unsafe_allow_html=True)
-        ckpt_file = st.file_uploader("Upload best_model.pt", type=["pt", "pth"], label_visibility="collapsed")
-        if ckpt_file:
-            ckpt_tmp = Path("/tmp/best_model.pt")
-            ckpt_tmp.write_bytes(ckpt_file.read())
-            st.session_state["ckpt_path"] = str(ckpt_tmp)
-            st.rerun()
+    # Model source info
+    st.markdown("<p style='color:rgba(255,255,255,0.6); font-size:0.82rem; font-weight:600; letter-spacing:1px; text-transform:uppercase;'>Model Source</p>", unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div style='background:rgba(52,211,153,0.12); border:1px solid rgba(52,211,153,0.35);
+                border-radius:10px; padding:10px 14px; font-size:0.8rem;'>
+        <span style='color:#34d399; font-weight:600;'>🤗 Hugging Face Hub</span><br>
+        <span style='color:rgba(255,255,255,0.45); font-size:0.74rem; word-break:break-all;'>
+            {HF_REPO_ID}<br>
+            File: {HF_MODEL_FILENAME}
+        </span>
+    </div>""", unsafe_allow_html=True)
 
     st.divider()
 
@@ -516,17 +495,16 @@ if "🔮" in page:
             st.warning("Please upload an image first.")
         elif not user_text.strip():
             st.warning("Please enter some text.")
-        elif "ckpt_path" not in st.session_state:
-            st.error("Upload your **best_model.pt** checkpoint in the sidebar first.")
         else:
-            with st.spinner("Running multimodal inference…"):
+            with st.spinner("Loading model from Hugging Face Hub and running inference..."):
                 try:
-                    model, device = load_model(st.session_state["ckpt_path"])
-                    tokenizer     = load_tokenizer()
-                    pred, probs   = predict(model, tokenizer, device, user_text, pil_img)
+                    # Load model from Hugging Face
+                    model, device = load_model_from_hf()
+                    tokenizer = load_tokenizer()
+                    pred, probs = predict(model, tokenizer, device, user_text, pil_img)
 
-                    label  = LABEL_NAMES[pred]
-                    emoji  = LABEL_EMOJIS[pred]
+                    label = LABEL_NAMES[pred]
+                    emoji = LABEL_EMOJIS[pred]
                     badge_cls = f"badge-{label.lower()}"
 
                     st.markdown("---")
@@ -583,12 +561,11 @@ if "🔮" in page:
 
     else:
         # placeholder hint
-        if "ckpt_path" not in st.session_state:
-            st.info("⬅️  Upload your **best_model.pt** in the sidebar, then provide an image + text above to run prediction.")
+        st.info("⬅️  Upload an image and enter text above to run prediction. Model will be downloaded from Hugging Face Hub automatically.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PAGE 2 — TRAINING DETAILS
+#  PAGE 2 — TRAINING DETAILS (KEPT EXACTLY THE SAME AS ORIGINAL)
 # ══════════════════════════════════════════════════════════════════════════════
 else:
     st.markdown('<div class="page-title">📊 Training Details & Model Report</div>', unsafe_allow_html=True)
