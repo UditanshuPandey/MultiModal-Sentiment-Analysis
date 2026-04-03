@@ -260,6 +260,7 @@ LABEL_EMOJIS = ["😠", "😐", "😊"]
 IMG_MEAN = [0.485, 0.456, 0.406]
 IMG_STD  = [0.229, 0.224, 0.225]
 ASSETS_DIR = Path(__file__).parent / "assets"
+DEMO_DIR = ASSETS_DIR / "demo"
 
 TRAINING_HISTORY = {
     "epoch":     [1,2,3,4,5,6,7,8,9,10,11],
@@ -447,22 +448,200 @@ with st.sidebar:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  PAGE 1 — PREDICTION
+#  PAGE 1 — PREDICTION (WITH DEMO EXAMPLES FROM YOUR DATA)
 # ══════════════════════════════════════════════════════════════════════════════
 if "🔮" in page:
 
     st.markdown('<div class="page-title">🔮 Multimodal Sentiment Predictor</div>', unsafe_allow_html=True)
     st.markdown('<div class="page-subtitle">Combine an image with text for richer, context-aware sentiment analysis.</div>', unsafe_allow_html=True)
 
-    # ── Input columns
+    # ── Demo Examples Section using specific IDs from your data ───────────────────
+    with st.expander("🎯 Try Demo Examples", expanded=False):
+        st.markdown("Click any demo button below to load the example from assets/demo/ folder:")
+        st.markdown("*(Place images as `ID.png` and text as `ID.txt` in the `assets/demo/` folder)*")
+        
+        # Demo examples with specific IDs from your data - using label combinations as names
+        demo_examples = [
+            {
+                "id": 6,
+                "name": "✅ Positive Text + Positive Image",
+                "text_label": "positive",
+                "image_label": "positive",
+                "desc": "Both modalities agree on positive sentiment"
+            },
+            {
+                "id": 10,
+                "name": "❌ Negative Text + Negative Image",
+                "text_label": "negative",
+                "image_label": "negative",
+                "desc": "Both modalities agree on negative sentiment"
+            },
+            {
+                "id": 25,
+                "name": "⚪ Neutral Text + Neutral Image",
+                "text_label": "neutral",
+                "image_label": "neutral",
+                "desc": "Both modalities agree on neutral sentiment"
+            },
+            {
+                "id": 37,
+                "name": "🔄 Positive Text + Negative Image",
+                "text_label": "positive",
+                "image_label": "negative",
+                "desc": "Contradictory: Positive text with negative image"
+            },
+            {
+                "id": 50,
+                "name": "🔄 Positive Text + Negative Image",
+                "text_label": "positive",
+                "image_label": "negative",
+                "desc": "Contradictory: Positive text with negative image"
+            },
+            {
+                "id": 90,
+                "name": "🔄 Negative Text + Positive Image",
+                "text_label": "negative",
+                "image_label": "positive",
+                "desc": "Contradictory: Negative text with positive image"
+            },
+            {
+                "id": 140,
+                "name": "⚪ Neutral Text + Neutral Image",
+                "text_label": "neutral",
+                "image_label": "neutral",
+                "desc": "Both modalities agree on neutral sentiment"
+            },
+            {
+                "id": 206,
+                "name": "🔄 Positive Text + Negative Image",
+                "text_label": "positive",
+                "image_label": "negative",
+                "desc": "Contradictory: Positive text with negative image"
+            },
+            {
+                "id": 1,
+                "name": "⚪ Neutral Text + Positive Image",
+                "text_label": "neutral",
+                "image_label": "positive",
+                "desc": "Neutral text with positive image"
+            },
+            {
+                "id": 30,
+                "name": "🔄 Neutral Text + Negative Image",
+                "text_label": "neutral",
+                "image_label": "negative",
+                "desc": "Neutral text with negative image"
+            },
+            {
+                "id": 51,
+                "name": "🔄 Positive Text + Neutral Image",
+                "text_label": "positive",
+                "image_label": "neutral",
+                "desc": "Positive text with neutral image"
+            },
+            {
+                "id": 62,
+                "name": "🔄 Positive Text + Neutral Image",
+                "text_label": "positive",
+                "image_label": "neutral",
+                "desc": "Positive text with neutral image"
+            },
+        ]
+        
+        # Display demos in a grid
+        cols_per_row = 3
+        for i in range(0, len(demo_examples), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j, col in enumerate(cols):
+                if i + j < len(demo_examples):
+                    demo = demo_examples[i + j]
+                    with col:
+                        if st.button(
+                            f"{demo['name']} (ID: {demo['id']})",
+                            key=f"demo_btn_{demo['id']}",
+                            use_container_width=True
+                        ):
+                            # Try to load text from assets/demo/{id}.txt with encoding fallback
+                            text_path = DEMO_DIR / f"{demo['id']}.txt"
+                            if text_path.exists():
+                                # Try different encodings
+                                demo_text = None
+                                for encoding in ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']:
+                                    try:
+                                        with open(text_path, 'r', encoding=encoding) as f:
+                                            demo_text = f.read().strip()
+                                        break  # Success, exit the loop
+                                    except (UnicodeDecodeError, UnicodeError):
+                                        continue  # Try next encoding
+                                
+                                if demo_text is None:
+                                    # If all encodings fail, use binary mode to read and replace problematic characters
+                                    with open(text_path, 'rb') as f:
+                                        raw_data = f.read()
+                                        # Decode with 'replace' to replace invalid characters
+                                        demo_text = raw_data.decode('utf-8', errors='replace').strip()
+                                        st.warning(f"File {demo['id']}.txt had encoding issues, some characters may be replaced.")
+                            else:
+                                # Placeholder text based on label combination
+                                if demo['text_label'] == "positive":
+                                    demo_text = "This is an amazing experience! I love it so much! #happy #blessed"
+                                elif demo['text_label'] == "negative":
+                                    demo_text = "This is absolutely terrible. I'm so disappointed and angry. #worstday"
+                                else:
+                                    demo_text = "Just another ordinary day. Nothing special to report. #neutral"
+                            
+                            st.session_state['demo_text'] = demo_text
+                            st.session_state['demo_image_id'] = demo['id']
+                            st.session_state['use_demo'] = True
+                            st.session_state['demo_name'] = demo['name']
+                            st.session_state['demo_desc'] = demo['desc']
+                            st.rerun()
+        
+        # Legend for understanding the naming convention
+        st.markdown("---")
+        st.markdown("""
+        <div style='background:rgba(255,255,255,0.05); border-radius:8px; padding:10px; margin-top:10px;'>
+            <span style='color:#a78bfa;'>📋 Label Combination Legend:</span><br>
+            <span style='color:rgba(255,255,255,0.5); font-size:0.75rem;'>
+                ✅ Positive+Positive = Both agree positive<br>
+                ❌ Negative+Negative = Both agree negative<br>
+                ⚪ Neutral+Neutral = Both agree neutral<br>
+                🔄 Mixed/Contradictory = Text and image disagree
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Input Columns ─────────────────────────────────────────────────────────────
     col_img, col_txt = st.columns([1, 1], gap="large")
 
     with col_img:
         st.markdown('<div class="section-heading">📷 Upload Image</div>', unsafe_allow_html=True)
+        
+        demo_image_id = st.session_state.get('demo_image_id') if st.session_state.get('use_demo') else None
         uploaded_img = st.file_uploader("Drop an image", type=["jpg","jpeg","png","webp"], label_visibility="collapsed")
+        
         if uploaded_img:
             pil_img = Image.open(uploaded_img).convert("RGB")
             st.image(pil_img, use_container_width=True, caption="Input image")
+            if st.session_state.get('use_demo'):
+                st.session_state['use_demo'] = False
+        elif demo_image_id:
+            # Try different image extensions
+            img_path = None
+            for ext in ['.png', '.jpg', '.jpeg', '.webp']:
+                test_path = DEMO_DIR / f"{demo_image_id}{ext}"
+                if test_path.exists():
+                    img_path = test_path
+                    break
+            
+            if img_path:
+                pil_img = Image.open(img_path).convert("RGB")
+                st.image(pil_img, use_container_width=True, caption=f"Demo Image ID: {demo_image_id}")
+                st.caption(f"📷 From: assets/demo/{demo_image_id}{img_path.suffix}")
+            else:
+                st.warning(f"Demo image ID {demo_image_id} not found in assets/demo/ folder")
+                st.code(f"Expected files: assets/demo/{demo_image_id}.png or .jpg")
+                pil_img = None
         else:
             st.markdown("""
             <div style='border:2px dashed rgba(167,139,250,0.3); border-radius:12px;
@@ -475,30 +654,63 @@ if "🔮" in page:
 
     with col_txt:
         st.markdown('<div class="section-heading">💬 Enter Text</div>', unsafe_allow_html=True)
+        
+        default_text = st.session_state.get('demo_text', "")
         user_text = st.text_area(
             "Tweet / caption / post accompanying the image",
-            placeholder="e.g.  Amazing sunset at the beach! Best day ever 🌅 #happy",
+            value=default_text,
+            placeholder="e.g. Amazing sunset at the beach! Best day ever 🌅 #happy",
             height=140,
             label_visibility="collapsed"
         )
+        
         st.markdown("""
         <div style='color:rgba(255,255,255,0.35); font-size:0.78rem; margin-top:6px;'>
             URLs and @mentions are automatically stripped before inference.
         </div>""", unsafe_allow_html=True)
 
+        # Show demo info if active - NO BUTTON HERE
+        if st.session_state.get('use_demo'):
+            demo_name = st.session_state.get('demo_name', '')
+            demo_desc = st.session_state.get('demo_desc', '')
+            
+            if demo_name:
+                st.info(f"🎯 **Demo: {demo_name}**\n\n{demo_desc}")
+        
         st.markdown("<br>", unsafe_allow_html=True)
-        run_btn = st.button("✨  Analyse Sentiment", use_container_width=True)
+        run_btn = st.button("✨ Analyse Sentiment", use_container_width=True)
 
-    # ── Prediction
+    # ── Prediction ───────────────────────────────────────────────────────────────
     if run_btn:
-        if not uploaded_img:
-            st.warning("Please upload an image first.")
+        has_image = uploaded_img is not None or (st.session_state.get('use_demo') and st.session_state.get('demo_image_id'))
+        
+        if not has_image:
+            st.warning("Please upload an image or select a demo example first.")
         elif not user_text.strip():
             st.warning("Please enter some text.")
         else:
+            if uploaded_img:
+                pil_img = Image.open(uploaded_img).convert("RGB")
+            elif demo_image_id:
+                # Find the image file
+                img_path = None
+                for ext in ['.png', '.jpg', '.jpeg', '.webp']:
+                    test_path = DEMO_DIR / f"{demo_image_id}{ext}"
+                    if test_path.exists():
+                        img_path = test_path
+                        break
+                
+                if img_path:
+                    pil_img = Image.open(img_path).convert("RGB")
+                else:
+                    st.error(f"Demo image ID {demo_image_id} not found. Please add image to assets/demo/ folder.")
+                    st.stop()
+            else:
+                st.error("No image available")
+                st.stop()
+                
             with st.spinner("Loading model from Hugging Face Hub and running inference..."):
                 try:
-                    # Load model from Hugging Face
                     model, device = load_model_from_hf()
                     tokenizer = load_tokenizer()
                     pred, probs = predict(model, tokenizer, device, user_text, pil_img)
@@ -544,25 +756,32 @@ if "🔮" in page:
                     )
                     st.markdown(result_html, unsafe_allow_html=True)
 
-                    # — input summary
                     with st.expander("📋 Input summary", expanded=False):
                         ec1, ec2 = st.columns(2)
                         with ec1:
                             st.image(pil_img, width=200)
                         with ec2:
                             cleaned = re.sub(r'http\S+|@\w+', '', user_text).strip()
-                            st.markdown(f"**Raw text:** {user_text}")
-                            st.markdown(f"**Cleaned:** {cleaned}")
+                            st.markdown(f"**Raw text:** {user_text[:200]}...")
+                            st.markdown(f"**Cleaned:** {cleaned[:200]}...")
                             st.markdown(f"**Device:** `{device}`")
-
+                            
                 except Exception as e:
                     st.error(f"Inference error: {e}")
                     st.exception(e)
 
-    else:
-        # placeholder hint
-        st.info("⬅️  Upload an image and enter text above to run prediction. Model will be downloaded from Hugging Face Hub automatically.")
-
+    # ── Clear Demo Button - Single instance, appears only when demo is active ─────────
+    if st.session_state.get('use_demo'):
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🗑️ Clear Demo", key="clear_demo_unique", use_container_width=True):
+                st.session_state['use_demo'] = False
+                st.session_state['demo_text'] = ""
+                st.session_state['demo_image_id'] = None
+                st.session_state['demo_name'] = ""
+                st.session_state['demo_desc'] = ""
+                st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  PAGE 2 — TRAINING DETAILS (KEPT EXACTLY THE SAME AS ORIGINAL)
